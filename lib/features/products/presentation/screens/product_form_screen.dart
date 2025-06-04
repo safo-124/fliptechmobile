@@ -7,14 +7,26 @@ import 'package:fluttertoast/fluttertoast.dart';
 
 // Adjust paths as needed
 import '../cubit/product_form_cubit.dart';
-import '../../../../data/models/category_model.dart'; 
-import '../../../../shared_widgets/loading_dialog.dart'; // Create this simple dialog
+import '../../../../data/models/category_model.dart';
+// Import StringExtension for capitalizeWords if it's in a separate utils file
+// import '../../../../core/utils/string_extensions.dart';
+
+
+// Helper extension for capitalizing strings (can be in a utils file)
+extension StringExtension on String {
+  String capitalizeWords() {
+    if (isEmpty) return this;
+    return split(' ').map((word) {
+      if (word.isEmpty) return '';
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+  }
+}
+
 
 class ProductFormScreen extends StatefulWidget {
-  // Optionally pass a ProductListing object for editing mode
-  // final ProductListing? productToEdit;
+  // final ProductListing? productToEdit; // For edit mode later
   // const ProductFormScreen({super.key, this.productToEdit});
-
   const ProductFormScreen({super.key}); // For create mode initially
 
   @override
@@ -29,32 +41,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
   final _stockQuantityController = TextEditingController();
-  final _materialsController = TextEditingController(); // For comma-separated materials
+  final _materialsController = TextEditingController(); 
   final _dimensionsController = TextEditingController();
   final _skuController = TextEditingController();
   final _shippingDetailsController = TextEditingController();
 
   String? _selectedCategoryId;
-  String _selectedStatus = 'DRAFT'; // Default status
+  String _selectedStatus = 'DRAFT'; 
 
   @override
   void initState() {
     super.initState();
-    // If editing, pre-fill form:
-    // if (widget.productToEdit != null) {
-    //   final p = widget.productToEdit!;
-    //   _titleController.text = p.title;
-    //   _descriptionController.text = p.description;
-    //   _priceController.text = p.price.toString();
-    //   _stockQuantityController.text = p.stockQuantity?.toString() ?? '';
-    //   _materialsController.text = p.materials.join(', ');
-    //   _dimensionsController.text = p.dimensions ?? '';
-    //   _skuController.text = p.sku ?? '';
-    //   _shippingDetailsController.text = p.shippingDetails ?? '';
-    //   _selectedCategoryId = p.categoryId;
-    //   _selectedStatus = p.status;
-    //   // Handle pre-filling images if editing (more complex)
-    // }
+    // context.read<ProductFormCubit>().fetchCategories(); // Cubit constructor already does this
   }
 
   @override
@@ -72,29 +70,26 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   void _submitProductForm() {
     if (_formKey.currentState!.validate()) {
-      FocusScope.of(context).unfocus();
-      // Basic validation for category
       if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
-        Fluttertoast.showToast(msg: "Please select a category.", backgroundColor: Colors.orange[700]);
+        Fluttertoast.showToast(msg: "Please select a product category.", backgroundColor: Colors.orange[700]);
         return;
       }
-      
-      // Image validation - ensure at least one image is picked for a new product (optional)
-      // if (widget.productToEdit == null && context.read<ProductFormCubit>().selectedImages.isEmpty) {
-      //   Fluttertoast.showToast(msg: "Please add at least one image.", backgroundColor: Colors.orange[700]);
-      //   return;
-      // }
+      if (context.read<ProductFormCubit>().selectedImages.isEmpty) {
+         Fluttertoast.showToast(msg: "Please add at least one product image.", backgroundColor: Colors.orange[700]);
+        return;
+      }
+      FocusScope.of(context).unfocus();
 
       final productData = {
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
-        'currency': 'GHS', // Or from a selector if you support multiple
-        'stockQuantity': int.tryParse(_stockQuantityController.text.trim()), // Nullable if empty
+        'currency': 'GHS',
+        'stockQuantity': _stockQuantityController.text.trim().isEmpty ? null : int.tryParse(_stockQuantityController.text.trim()),
         'materials': _materialsController.text.trim().split(',').map((m) => m.trim()).where((m) => m.isNotEmpty).toList(),
-        'dimensions': _dimensionsController.text.trim(),
-        'sku': _skuController.text.trim(),
-        'shippingDetails': _shippingDetailsController.text.trim(),
+        'dimensions': _dimensionsController.text.trim().isNotEmpty ? _dimensionsController.text.trim() : null,
+        'sku': _skuController.text.trim().isNotEmpty ? _skuController.text.trim() : null,
+        'shippingDetails': _shippingDetailsController.text.trim().isNotEmpty ? _shippingDetailsController.text.trim() : null,
         'categoryId': _selectedCategoryId,
         'status': _selectedStatus.toUpperCase(),
       };
@@ -102,92 +97,110 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
-  Widget _buildImagePicker(BuildContext context, ProductFormState state) {
-    List<XFile> currentImages = [];
-    if (state is ProductFormImagesSelected) {
-      currentImages = state.images;
-    } else if (context.read<ProductFormCubit>().selectedImages.isNotEmpty) {
-        // Fallback to cubit's internal list if state hasn't caught up (e.g., initial build after pick)
-        currentImages = context.read<ProductFormCubit>().selectedImages;
-    }
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey[300]),
+      ),
+    );
+  }
 
+  Widget _buildImagePickerUI(BuildContext context, ProductFormState currentState) {
+    final List<XFile> currentImages = context.read<ProductFormCubit>().selectedImages;
+    final bool isPicking = currentState is ProductFormImagePicking;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("Product Images (up to 5)", style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-        SizedBox(height: 8),
-        Wrap(
-          spacing: 8.0,
-          runSpacing: 8.0,
-          children: [
-            ...currentImages.map((imageFile) => Stack(
-                  children: [
-                    ClipRRect(
+        Text("Product Images (Drag to reorder, max 5 recommended)", style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+        SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey[850]?.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(color: Colors.grey[700]!),
+          ),
+          child: Wrap(
+            spacing: 10.0,
+            runSpacing: 10.0,
+            children: [
+              ...currentImages.map((imageFile) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8.0),
+                        child: Image.file(
+                          File(imageFile.path),
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: -8,
+                        right: -8,
+                        child: InkWell(
+                          onTap: () => context.read<ProductFormCubit>().removeImage(imageFile),
+                          child: Container(
+                            padding: EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.close, color: Colors.white, size: 14),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )),
+              if (currentImages.length < 5)
+                GestureDetector(
+                  onTap: isPicking ? null : () => context.read<ProductFormCubit>().pickImages(multiple: true),
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[800],
                       borderRadius: BorderRadius.circular(8.0),
-                      child: Image.file(
-                        File(imageFile.path),
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.cover,
-                      ),
+                      // CORRECTED BORDER STYLE
+                      border: Border.all(color: Colors.grey[700]!, style: BorderStyle.solid), 
                     ),
-                    Positioned(
-                      top: -4,
-                      right: -4,
-                      child: IconButton(
-                        iconSize: 18,
-                        padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(),
-                        icon: Icon(Icons.remove_circle, color: Colors.redAccent[100]),
-                        onPressed: () => context.read<ProductFormCubit>().removeImage(imageFile),
-                      ),
-                    ),
-                  ],
-                )),
-            if (currentImages.length < 5) // Limit to 5 images
-              GestureDetector(
-                onTap: () => context.read<ProductFormCubit>().pickImages(multiple: true),
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(8.0),
-                    border: Border.all(color: Colors.grey[700]!),
+                    child: isPicking 
+                        ? Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.secondary)))
+                        : Icon(Icons.add_a_photo_outlined, color: Colors.grey[500], size: 30),
                   ),
-                  child: Icon(Icons.add_a_photo_outlined, color: Colors.grey[500], size: 30),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
-         if (state is ProductFormImagePicking) Padding(
-           padding: const EdgeInsets.only(top: 8.0),
-           child: Text("Picking images...", style: TextStyle(color: Colors.tealAccent[200])),
-         ),
       ],
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text('Add New Product'), // Change to 'Edit Product' if editing
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        title: Text('List New Product', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        backgroundColor: Colors.grey[900],
+        elevation: 1,
+        iconTheme: IconThemeData(color: Colors.white),
       ),
       body: BlocConsumer<ProductFormCubit, ProductFormState>(
         listener: (context, state) {
           if (state is ProductFormSuccess) {
-            Fluttertoast.showToast(msg: "Product created successfully!", backgroundColor: Colors.green);
-            Navigator.of(context).pop(); // Go back to product list after success
+            Fluttertoast.showToast(msg: "Product '${state.product.title}' listed for approval!", backgroundColor: Colors.green);
+            Navigator.of(context).pop(true);
           } else if (state is ProductFormError && state.message.isNotEmpty) {
-            // Avoid showing toast if message is empty (e.g. from image picking error handled by UI change)
-            if (!(state.message.toLowerCase().contains("failed to pick images"))){
-                 Fluttertoast.showToast(msg: "Error: ${state.message}", backgroundColor: Colors.redAccent[700]);
+            if (!(state.message.toLowerCase().contains("failed to pick images"))) {
+               Fluttertoast.showToast(msg: "Error: ${state.message}", backgroundColor: Colors.redAccent[700], toastLength: Toast.LENGTH_LONG);
             }
           }
         },
@@ -195,131 +208,95 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           List<Category> categories = [];
           bool areCategoriesLoading = true;
 
+          // Logic to get categories from various states (as before)
           if (state is ProductFormCategoriesLoaded) {
             categories = state.categories;
             areCategoriesLoading = false;
           } else if (state is ProductFormError && state.categories != null) {
-            categories = state.categories!; // Use categories even if other error occurred
+            categories = state.categories!;
             areCategoriesLoading = false;
-          } else if (state is ProductFormImagePicking || state is ProductFormImagesSelected || state is ProductFormSubmitting || state is ProductFormSuccess){
-            // Try to get categories from a previous loaded state if current state doesn't have them
-             final cubit = context.read<ProductFormCubit>();
-             if(cubit.state is ProductFormCategoriesLoaded) {
-               categories = (cubit.state as ProductFormCategoriesLoaded).categories;
-               areCategoriesLoading = false;
-             } else if (cubit.state is ProductFormError && (cubit.state as ProductFormError).categories != null) {
-               categories = (cubit.state as ProductFormError).categories!;
-               areCategoriesLoading = false;
-             }
+          } else if (state is ProductFormImagePicking || state is ProductFormImagesSelected || state is ProductFormSubmitting || state is ProductFormSuccess) {
+             final cubitCurrentState = context.read<ProductFormCubit>().state;
+             if (cubitCurrentState is ProductFormCategoriesLoaded) categories = cubitCurrentState.categories;
+             else if (cubitCurrentState is ProductFormError && cubitCurrentState.categories != null) categories = cubitCurrentState.categories!;
+             areCategoriesLoading = categories.isEmpty && !(cubitCurrentState is ProductFormError && cubitCurrentState.categories != null);
+          } else if (state is ProductFormInitial || state is ProductFormLoadingCategories) {
+            areCategoriesLoading = true;
           }
-
-
+          
           bool isSubmitting = state is ProductFormSubmitting;
-          if (isSubmitting) {
-             // Optionally show a full-screen loading dialog or inline loader
-             // For simplicity, the button will show a loader.
-             // WidgetsBinding.instance.addPostFrameCallback((_) => LoadingDialog.show(context));
-          } else {
-             // WidgetsBinding.instance.addPostFrameCallback((_) => LoadingDialog.hide(context));
-          }
-
 
           return SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(20.0),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Title
-                    TextFormField(controller: _titleController, decoration: InputDecoration(labelText: 'Product Title', hintText: 'e.g., Handmade Kente Scarf'), validator: (v) => v!.isEmpty ? 'Title is required' : null),
+                    _buildSectionTitle("Basic Information"),
+                    TextFormField(controller: _titleController, decoration: InputDecoration(labelText: 'Product Title*', hintText: 'e.g., Handmade Beaded Necklace', prefixIcon: Icon(Icons.title_rounded, color: Colors.grey[500])), validator: (v) => v!.trim().isEmpty ? 'Title is required' : null),
                     SizedBox(height: 16),
-                    // Description
-                    TextFormField(controller: _descriptionController, decoration: InputDecoration(labelText: 'Description', hintText: 'Detailed description of your product...'), maxLines: 4, validator: (v) => v!.isEmpty ? 'Description is required' : null),
-                    SizedBox(height: 16),
-                    // Price
-                    TextFormField(controller: _priceController, decoration: InputDecoration(labelText: 'Price (GHS)', hintText: 'e.g., 50.00', prefixText: '₵ '), keyboardType: TextInputType.numberWithOptions(decimal: true), validator: (v) => v!.isEmpty || double.tryParse(v) == null || double.parse(v) <=0 ? 'Valid price is required' : null),
-                    SizedBox(height: 16),
-                    // Stock Quantity
-                    TextFormField(controller: _stockQuantityController, decoration: InputDecoration(labelText: 'Stock Quantity (Optional)', hintText: 'e.g., 10'), keyboardType: TextInputType.number, validator: (v) { if (v!.isNotEmpty && int.tryParse(v) == null) return 'Must be a valid number'; return null;}),
+                    TextFormField(controller: _descriptionController, decoration: InputDecoration(labelText: 'Full Description*', hintText: 'Materials, story, care instructions...', prefixIcon: Icon(Icons.description_outlined, color: Colors.grey[500]), alignLabelWithHint: true), maxLines: 5, minLines: 3, validator: (v) => v!.trim().isEmpty ? 'Description is required' : null),
                     SizedBox(height: 16),
                     
-                    // Category Dropdown
-                    if (areCategoriesLoading)
-                       Column(children: [Text('Loading categories...', style: TextStyle(color: Colors.grey[400])), SizedBox(height: 10), CircularProgressIndicator(strokeWidth: 2)])
-                    else if (categories.isEmpty && !areCategoriesLoading)
-                       Text('No product categories found. Please add them in the admin panel.', style: TextStyle(color: Colors.orangeAccent))
-                    else
+                    if (areCategoriesLoading) 
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Row(children: [SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width:16), Text('Loading product categories...', style: TextStyle(color: Colors.grey[400]))]))
+                    else if (categories.isEmpty && !areCategoriesLoading) 
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text('No product categories found. Please add them via the admin panel.', style: TextStyle(color: Colors.orangeAccent)))
+                    else 
                       DropdownButtonFormField<String>(
                         value: _selectedCategoryId,
-                        decoration: InputDecoration(labelText: 'Category', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0))),
+                        decoration: InputDecoration(labelText: 'Product Category*', prefixIcon: Icon(Icons.category_outlined, color: Colors.grey[500])),
                         hint: Text('Select a category', style: TextStyle(color: Colors.grey[500])),
-                        isExpanded: true,
-                        dropdownColor: Colors.grey[850],
-                        style: TextStyle(color: Colors.white),
-                        items: categories.map((Category category) {
-                          return DropdownMenuItem<String>(
-                            value: category.id,
-                            child: Text(category.name, style: TextStyle(color: Colors.white)),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedCategoryId = newValue;
-                          });
-                        },
+                        isExpanded: true, dropdownColor: Colors.grey[850], style: TextStyle(color: Colors.white),
+                        items: categories.map((Category category) => DropdownMenuItem<String>(value: category.id, child: Text(category.name, style: TextStyle(color: Colors.white)))).toList(),
+                        onChanged: (String? newValue) => setState(() => _selectedCategoryId = newValue),
                         validator: (value) => value == null || value.isEmpty ? 'Please select a category' : null,
                       ),
                     SizedBox(height: 16),
 
-                    // Image Picker UI
-                    _buildImagePicker(context, state),
+                    _buildSectionTitle("Pricing & Stock"),
+                    TextFormField(controller: _priceController, decoration: InputDecoration(labelText: 'Price (GHS)*', hintText: 'e.g., 75.50', prefixText: '₵ ', prefixIcon: Icon(Icons.attach_money, color: Colors.grey[500])), keyboardType: TextInputType.numberWithOptions(decimal: true), validator: (v) => v!.isEmpty || double.tryParse(v.trim()) == null || double.parse(v.trim()) <=0 ? 'Valid price is required' : null),
                     SizedBox(height: 16),
-                    
-                    // Materials (comma-separated)
-                    TextFormField(controller: _materialsController, decoration: InputDecoration(labelText: 'Materials (comma-separated)', hintText: 'e.g., Cotton, Beads, Dye'),),
+                    TextFormField(controller: _stockQuantityController, decoration: InputDecoration(labelText: 'Stock Quantity (Optional)', hintText: 'e.g., 10, leave empty if unlimited/made-to-order', prefixIcon: Icon(Icons.inventory_2_outlined, color: Colors.grey[500])), keyboardType: TextInputType.number, validator: (v) { if (v!.isNotEmpty && (int.tryParse(v.trim()) == null || int.parse(v.trim()) < 0)) return 'Must be a valid non-negative number'; return null;}),
                     SizedBox(height: 16),
-                    // Dimensions
-                    TextFormField(controller: _dimensionsController, decoration: InputDecoration(labelText: 'Dimensions (Optional)', hintText: 'e.g., 10cm x 5cm x 2cm'),),
-                    SizedBox(height: 16),
-                    // SKU
-                    TextFormField(controller: _skuController, decoration: InputDecoration(labelText: 'SKU (Optional)', hintText: 'e.g., KENTE-SCARF-001'),),
-                    SizedBox(height: 16),
-                    // Shipping Details
-                    TextFormField(controller: _shippingDetailsController, decoration: InputDecoration(labelText: 'Shipping Details (Optional)', hintText: 'e.g., Ships in 2-3 days...'), maxLines: 3,),
+                    TextFormField(controller: _skuController, decoration: InputDecoration(labelText: 'SKU (Optional)', hintText: 'e.g., NECK-BD-001', prefixIcon: Icon(Icons.qr_code_scanner_outlined, color: Colors.grey[500]))),
                     SizedBox(height: 16),
 
-                    // Status Dropdown
+                    _buildSectionTitle("Product Specifics & Images"), // Renamed section
+                    _buildImagePickerUI(context, state), 
+                    SizedBox(height: 16),
+                    TextFormField(controller: _materialsController, decoration: InputDecoration(labelText: 'Materials (comma-separated)', hintText: 'e.g., Glass beads, Nylon thread, Silver clasp', prefixIcon: Icon(Icons.science_outlined, color: Colors.grey[500]))),
+                    SizedBox(height: 16),
+                    TextFormField(controller: _dimensionsController, decoration: InputDecoration(labelText: 'Dimensions (Optional)', hintText: 'e.g., Length: 45cm, Pendant: 3cm x 2cm', prefixIcon: Icon(Icons.straighten_outlined, color: Colors.grey[500]))),
+                    SizedBox(height: 16),
+                    TextFormField(controller: _shippingDetailsController, decoration: InputDecoration(labelText: 'Shipping Details (Optional)', hintText: 'e.g., Ships in 1-2 business days via EMS', prefixIcon: Icon(Icons.local_shipping_outlined, color: Colors.grey[500]), alignLabelWithHint: true), maxLines: 3, minLines: 2),
+                    SizedBox(height: 16),
+
+                    _buildSectionTitle("Listing Status"),
                      DropdownButtonFormField<String>(
                         value: _selectedStatus,
-                        decoration: InputDecoration(labelText: 'Status', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0))),
-                        isExpanded: true,
-                        dropdownColor: Colors.grey[850],
-                        style: TextStyle(color: Colors.white),
-                        items: ['DRAFT', 'ACTIVE', 'INACTIVE'].map((String status) {
-                          return DropdownMenuItem<String>(
-                            value: status,
-                            child: Text(status.replaceAll('_', ' ').toLowerCase().capitalize(), style: TextStyle(color: Colors.white)),
-                          );
+                        decoration: InputDecoration(labelText: 'Initial Listing Status', prefixIcon: Icon(Icons.toggle_on_outlined, color: Colors.grey[500])),
+                        isExpanded: true, dropdownColor: Colors.grey[850], style: TextStyle(color: Colors.white),
+                        items: ['DRAFT', 'PENDING_APPROVAL'].map((String status) {
+                          return DropdownMenuItem<String>(value: status, child: Text(status.replaceAll('_', ' ').capitalizeWords(), style: TextStyle(color: Colors.white)));
                         }).toList(),
-                        onChanged: (String? newValue) {
-                          if(newValue != null) {
-                            setState(() { _selectedStatus = newValue; });
-                          }
-                        },
+                        onChanged: (String? newValue) { if(newValue != null) setState(() => _selectedStatus = newValue);},
                       ),
-                    SizedBox(height: 32),
+                    SizedBox(height: 40),
 
                     ElevatedButton(
                       style: theme.elevatedButtonTheme.style?.copyWith(
                         padding: MaterialStateProperty.all(EdgeInsets.symmetric(vertical: 16)),
+                        textStyle: MaterialStateProperty.all(TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
                       ),
                       onPressed: isSubmitting ? null : _submitProductForm,
                       child: isSubmitting 
-                          ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.black)))
-                          : Text('Create Product'), // Update to 'Save Product' if editing
+                          ? SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 3, valueColor: AlwaysStoppedAnimation<Color>(Colors.black)))
+                          : Text('List My Product'),
                     ),
+                    SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -329,12 +306,4 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       ),
     );
   }
-}
-
-// Helper extension for capitalizing strings (optional)
-extension StringExtension on String {
-    String capitalize() {
-      if (this.isEmpty) return "";
-      return "${this[0].toUpperCase()}${this.substring(1).toLowerCase()}";
-    }
 }

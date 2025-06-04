@@ -7,10 +7,15 @@ import 'package:fluttertoast/fluttertoast.dart';
 import '../features/auth/presentation/cubit/auth_cubit.dart';
 import '../features/products/presentation/screens/my_products_screen.dart';
 import '../features/products/presentation/cubit/product_list_cubit.dart';
-import '../features/products/domain/repositories/product_repository.dart'; // For type
-import '../features/products/data/repositories/product_repository_impl.dart'; // For impl
-import '../features/products/data/datasources/product_remote_datasource.dart'; // For impl
-import '../core/api/api_client.dart'; // For ApiClient if instantiating directly
+import '../features/products/domain/repositories/product_repository.dart';
+import '../features/products/data/repositories/product_repository_impl.dart';
+import '../features/products/data/datasources/product_remote_datasource.dart';
+import '../features/services/presentation/screens/my_services_screen.dart';
+import '../features/services/presentation/cubit/service_list_cubit.dart';
+import '../features/services/domain/repositories/service_repository.dart';
+import '../features/services/data/repositories/service_repository_impl.dart';
+import '../features/services/data/datasources/service_remote_datasource.dart';
+import '../core/api/api_client.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -21,35 +26,98 @@ class AppDrawer extends StatelessWidget {
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
         timeInSecForIosWeb: 1,
-        backgroundColor: Colors.black.withOpacity(0.7),
+        backgroundColor: Colors.black.withOpacity(0.85),
         textColor: Colors.white,
-        fontSize: 16.0);
+        fontSize: 15.0);
   }
 
+  Widget _buildDrawerHeader(BuildContext context, String name, String email) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 20.0,
+        bottom: 20.0,
+        left: 20.0,
+        right: 20.0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 32,
+            backgroundColor: theme.colorScheme.primary.withOpacity(0.8),
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : "A",
+              style: TextStyle(fontSize: 30.0, color: Colors.black, fontWeight: FontWeight.w500),
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            name,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 17,
+              color: Colors.white,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          SizedBox(height: 2),
+          Text(
+            email,
+            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Corrected _buildDrawerItem to accept iconColor and textColor
   Widget _buildDrawerItem({
+    required BuildContext context,
     required IconData icon,
     required String text,
     required GestureTapCallback onTap,
-    Color? iconColor,
-    Color? textColor,
+    bool isSelected = false,
+    Color? iconColor, // Added back
+    Color? textColor, // Added back
   }) {
-    return ListTile(
-      leading: Icon(icon, color: iconColor ?? Colors.grey[300]),
-      title: Text(
-        text,
-        style: TextStyle(color: textColor ?? Colors.grey[100], fontSize: 15),
+    final theme = Theme.of(context);
+    final Color selectedColor = theme.colorScheme.primary; 
+    
+    // Use passed-in colors if provided, otherwise use defaults based on selection state
+    final Color effectiveIconColor = iconColor ?? (isSelected ? selectedColor : Colors.grey[400]!);
+    final Color effectiveTextColor = textColor ?? (isSelected ? selectedColor : Colors.grey[200]!);
+
+    return Material(
+      color: isSelected ? selectedColor.withOpacity(0.1) : Colors.transparent,
+      child: ListTile(
+        leading: Icon(icon, color: effectiveIconColor, size: 22),
+        title: Text(
+          text,
+          style: TextStyle(
+            color: effectiveTextColor, 
+            fontSize: 15.5, 
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal
+          ),
+        ),
+        onTap: onTap,
+        dense: false,
+        contentPadding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 6.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8)
+        ),
       ),
-      onTap: onTap,
-      dense: true,
-      visualDensity: VisualDensity.compact,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = context.watch<AuthCubit>().state;
-    String artisanName = "Artisan User";
-    String artisanEmail = "artisan@example.com"; // Placeholder
+    String artisanName = "Artisan";
+    String artisanEmail = "artisan@example.com";
 
     if (authState is Authenticated) {
       artisanName = authState.user.name?.isNotEmpty == true ? authState.user.name! : "Artisan";
@@ -58,125 +126,140 @@ class AppDrawer extends StatelessWidget {
 
     return Drawer(
       backgroundColor: Colors.grey[900], 
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: <Widget>[
-          UserAccountsDrawerHeader(
-            accountName: Text(
-              artisanName,
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
-            ),
-            accountEmail: Text(
-              artisanEmail,
-              style: TextStyle(color: Colors.grey[300]),
-            ),
-            currentAccountPicture: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: Text(
-                artisanName.isNotEmpty ? artisanName[0].toUpperCase() : "A",
-                style: TextStyle(fontSize: 24.0, color: Colors.black, fontWeight: FontWeight.bold),
-              ),
-            ),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-            ),
-          ),
-          _buildDrawerItem(
-            icon: Icons.dashboard_outlined,
-            text: 'Dashboard',
-            onTap: () {
-              Navigator.of(context).pop(); // Close drawer
-              // If using named routes and dashboard is '/', or if it's already the current root.
-              // For simplicity, assuming dashboard is home or handled by router.
-              // If not, use Navigator.pushReplacementNamed(context, '/dashboard');
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.inventory_2_outlined,
-            text: 'My Products',
-            onTap: () {
-              Navigator.of(context).pop(); // Close drawer first
-
-              // Example: Direct instantiation (improve with DI)
-              final apiClient = ApiClient(); 
-              final authRepository = context.read<AuthCubit>().authRepository;
-              final productRepository = ProductRepositoryImpl(
-                  remoteDataSource: ProductRemoteDataSourceImpl(apiClient: apiClient)
-              );
-
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => BlocProvider(
-                    create: (newContext) => ProductListCubit(
-                      productRepository: productRepository,
-                      authRepository: authRepository,
-                    ),
-                    child: const MyProductsScreen(),
-                  ),
+      child: Column(
+        children: [
+          _buildDrawerHeader(context, artisanName, artisanEmail),
+          Divider(color: Colors.grey[800], height: 1, thickness: 1),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              children: <Widget>[
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.dashboard_rounded,
+                  text: 'Dashboard',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    // Add navigation logic if not already on dashboard
+                  },
                 ),
-              );
-            },
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.storefront_rounded,
+                  text: 'My Products',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final apiClient = ApiClient(); 
+                    final authRepository = context.read<AuthCubit>().authRepository;
+                    final productRepository = ProductRepositoryImpl(
+                        remoteDataSource: ProductRemoteDataSourceImpl(apiClient: apiClient)
+                    );
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => BlocProvider(
+                          create: (_) => ProductListCubit(
+                            productRepository: productRepository,
+                            authRepository: authRepository,
+                          ),
+                          child: const MyProductsScreen(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.construction_rounded,
+                  text: 'My Services',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final apiClient = ApiClient();
+                    final authRepository = context.read<AuthCubit>().authRepository;
+                    final serviceRepository = ServiceRepositoryImpl(
+                        remoteDataSource: ServiceRemoteDataSourceImpl(apiClient: apiClient)
+                    );
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => BlocProvider(
+                          create: (_) => ServiceListCubit(
+                            serviceRepository: serviceRepository,
+                            authRepository: authRepository,
+                          ),
+                          child: const MyServicesScreen(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.school_rounded,
+                  text: 'My Training Offers',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showToast("My Training Offers (TBD)");
+                  },
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.receipt_long_rounded,
+                  text: 'Orders & Bookings',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showToast("Orders & Bookings (TBD)");
+                  },
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.chat_bubble_outline_rounded,
+                  text: 'Messages',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showToast("Messages (TBD)");
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Divider(color: Colors.grey[800], height: 1, thickness: 1),
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.account_circle_rounded,
+                  text: 'Manage Profile',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showToast("Manage Profile (TBD)");
+                  },
+                ),
+                _buildDrawerItem(
+                  context: context,
+                  icon: Icons.settings_rounded,
+                  text: 'Settings',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showToast("Settings (TBD)");
+                  },
+                ),
+              ],
+            ),
           ),
-          _buildDrawerItem(
-            icon: Icons.build_circle_outlined,
-            text: 'My Services',
-            onTap: () {
-              Navigator.of(context).pop();
-              _showToast("My Services (TBD)");
-            },
+          Container(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey[800]!, width: 1.0))
+            ),
+            child: _buildDrawerItem( // This call site was causing the error
+              context: context,
+              icon: Icons.exit_to_app_rounded,
+              text: 'Logout',
+              iconColor: Colors.orangeAccent[200], // Now valid
+              textColor: Colors.orangeAccent[200], // Now valid
+              onTap: () {
+                Navigator.of(context).pop(); 
+                context.read<AuthCubit>().logout();
+              },
+            ),
           ),
-          _buildDrawerItem(
-            icon: Icons.school_outlined,
-            text: 'My Training Offers',
-            onTap: () {
-              Navigator.of(context).pop();
-              _showToast("My Training Offers (TBD)");
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.receipt_long_outlined,
-            text: 'Orders & Bookings',
-            onTap: () {
-              Navigator.of(context).pop();
-              _showToast("Orders & Bookings (TBD)");
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.message_outlined,
-            text: 'Messages',
-            onTap: () {
-              Navigator.of(context).pop();
-              _showToast("Messages (TBD)");
-            },
-          ),
-          Divider(color: Colors.grey[700], height: 1),
-          _buildDrawerItem(
-            icon: Icons.account_circle_outlined,
-            text: 'Manage Profile',
-            onTap: () {
-              Navigator.of(context).pop();
-              _showToast("Manage Profile (TBD)");
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.settings_outlined,
-            text: 'Settings',
-            onTap: () {
-              Navigator.of(context).pop();
-              _showToast("Settings (TBD)");
-            },
-          ),
-          Divider(color: Colors.grey[700], height: 1),
-          _buildDrawerItem(
-            icon: Icons.logout,
-            text: 'Logout',
-            iconColor: Colors.orangeAccent[100],
-            textColor: Colors.orangeAccent[100],
-            onTap: () {
-              Navigator.of(context).pop(); 
-              context.read<AuthCubit>().logout();
-            },
-          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
         ],
       ),
     );
