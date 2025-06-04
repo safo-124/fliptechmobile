@@ -12,7 +12,7 @@ class ApiClient {
   //
   // static const String _physicalDeviceDevHost = "YOUR_COMPUTER_LOCAL_IP_ADDRESS";
   // For example, if your IP is 10.0.0.237:
-  static const String _physicalDeviceDevHost = "10.0.0.237"; // <<-- UPDATE THIS WITH YOUR IP
+  static const String _physicalDeviceDevHost = "10.0.1.69"; // <<-- UPDATE THIS WITH YOUR IP
 
   static const String _port = "3000"; // Your Next.js development server port
 

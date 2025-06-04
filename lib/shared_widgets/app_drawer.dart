@@ -1,10 +1,16 @@
 // lib/shared_widgets/app_drawer.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fluttertoast/fluttertoast.dart'; // Using fluttertoast
+import 'package:fluttertoast/fluttertoast.dart';
 
-// Assuming AuthCubit and its states (including Authenticated with User model) are here:
-import '../features/auth/presentation/cubit/auth_cubit.dart'; // Adjust path as needed
+// Adjust import paths based on your actual file structure
+import '../features/auth/presentation/cubit/auth_cubit.dart';
+import '../features/products/presentation/screens/my_products_screen.dart';
+import '../features/products/presentation/cubit/product_list_cubit.dart';
+import '../features/products/domain/repositories/product_repository.dart'; // For type
+import '../features/products/data/repositories/product_repository_impl.dart'; // For impl
+import '../features/products/data/datasources/product_remote_datasource.dart'; // For impl
+import '../core/api/api_client.dart'; // For ApiClient if instantiating directly
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -35,22 +41,23 @@ class AppDrawer extends StatelessWidget {
       ),
       onTap: onTap,
       dense: true,
+      visualDensity: VisualDensity.compact,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = context.watch<AuthCubit>().state; // Listen to AuthCubit state
+    final authState = context.watch<AuthCubit>().state;
     String artisanName = "Artisan User";
     String artisanEmail = "artisan@example.com"; // Placeholder
 
     if (authState is Authenticated) {
-      artisanName = authState.user.name ?? "Artisan"; // Use null-aware operator
+      artisanName = authState.user.name?.isNotEmpty == true ? authState.user.name! : "Artisan";
       artisanEmail = authState.user.email;
     }
 
     return Drawer(
-      backgroundColor: Colors.grey[900], // Dark background for the drawer
+      backgroundColor: Colors.grey[900], 
       child: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
@@ -71,7 +78,7 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
             decoration: BoxDecoration(
-              color: Colors.black54, // Slightly different header background
+              color: Colors.black54,
             ),
           ),
           _buildDrawerItem(
@@ -79,18 +86,35 @@ class AppDrawer extends StatelessWidget {
             text: 'Dashboard',
             onTap: () {
               Navigator.of(context).pop(); // Close drawer
-              // If already on dashboard, do nothing. 
-              // You might want to use named routes and check current route.
-              // For now, just pop. If dashboard is home, it's fine.
+              // If using named routes and dashboard is '/', or if it's already the current root.
+              // For simplicity, assuming dashboard is home or handled by router.
+              // If not, use Navigator.pushReplacementNamed(context, '/dashboard');
             },
           ),
           _buildDrawerItem(
             icon: Icons.inventory_2_outlined,
             text: 'My Products',
             onTap: () {
-              Navigator.of(context).pop();
-              // TODO: Navigate to My Products Screen
-              _showToast("Navigate to My Products (TBD)");
+              Navigator.of(context).pop(); // Close drawer first
+
+              // Example: Direct instantiation (improve with DI)
+              final apiClient = ApiClient(); 
+              final authRepository = context.read<AuthCubit>().authRepository;
+              final productRepository = ProductRepositoryImpl(
+                  remoteDataSource: ProductRemoteDataSourceImpl(apiClient: apiClient)
+              );
+
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider(
+                    create: (newContext) => ProductListCubit(
+                      productRepository: productRepository,
+                      authRepository: authRepository,
+                    ),
+                    child: const MyProductsScreen(),
+                  ),
+                ),
+              );
             },
           ),
           _buildDrawerItem(
@@ -98,7 +122,7 @@ class AppDrawer extends StatelessWidget {
             text: 'My Services',
             onTap: () {
               Navigator.of(context).pop();
-              _showToast("Navigate to My Services (TBD)");
+              _showToast("My Services (TBD)");
             },
           ),
           _buildDrawerItem(
@@ -106,7 +130,7 @@ class AppDrawer extends StatelessWidget {
             text: 'My Training Offers',
             onTap: () {
               Navigator.of(context).pop();
-              _showToast("Navigate to My Training (TBD)");
+              _showToast("My Training Offers (TBD)");
             },
           ),
           _buildDrawerItem(
@@ -114,7 +138,7 @@ class AppDrawer extends StatelessWidget {
             text: 'Orders & Bookings',
             onTap: () {
               Navigator.of(context).pop();
-              _showToast("Navigate to Orders (TBD)");
+              _showToast("Orders & Bookings (TBD)");
             },
           ),
           _buildDrawerItem(
@@ -122,16 +146,16 @@ class AppDrawer extends StatelessWidget {
             text: 'Messages',
             onTap: () {
               Navigator.of(context).pop();
-              _showToast("Navigate to Messages (TBD)");
+              _showToast("Messages (TBD)");
             },
           ),
-          Divider(color: Colors.grey[700]),
+          Divider(color: Colors.grey[700], height: 1),
           _buildDrawerItem(
             icon: Icons.account_circle_outlined,
             text: 'Manage Profile',
             onTap: () {
               Navigator.of(context).pop();
-              _showToast("Navigate to Manage Profile (TBD)");
+              _showToast("Manage Profile (TBD)");
             },
           ),
           _buildDrawerItem(
@@ -139,19 +163,18 @@ class AppDrawer extends StatelessWidget {
             text: 'Settings',
             onTap: () {
               Navigator.of(context).pop();
-              _showToast("Navigate to Settings (TBD)");
+              _showToast("Settings (TBD)");
             },
           ),
-          Divider(color: Colors.grey[700]),
+          Divider(color: Colors.grey[700], height: 1),
           _buildDrawerItem(
             icon: Icons.logout,
             text: 'Logout',
-            iconColor: Colors.orangeAccent[100], // Different color for logout icon
-            textColor: Colors.orangeAccent[100], // Different color for logout text
+            iconColor: Colors.orangeAccent[100],
+            textColor: Colors.orangeAccent[100],
             onTap: () {
-              Navigator.of(context).pop(); // Close the drawer first
+              Navigator.of(context).pop(); 
               context.read<AuthCubit>().logout();
-              // AuthWrapper in app.dart should handle navigation to LoginScreen
             },
           ),
         ],

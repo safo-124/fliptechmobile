@@ -3,11 +3,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
-import '../../../auth/presentation/cubit/auth_cubit.dart';
-import '../cubit/dashboard_cubit.dart';
-import '../../../../shared_widgets/app_drawer.dart'; // Adjust path if needed
+// Core & Service imports
+import '../../../../core/api/api_client.dart';
+import '../../../../services/category_service.dart';
+import '../../../../services/image_upload_service.dart';
 
-import 'package:flutter/cupertino.dart'; // For CupertinoIcons
+// Auth feature imports
+import '../../../auth/presentation/cubit/auth_cubit.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
+
+// Product feature imports
+import '../../../products/presentation/screens/my_products_screen.dart';
+import '../../../products/presentation/screens/product_form_screen.dart';
+import '../../../products/presentation/cubit/product_list_cubit.dart';
+import '../../../products/presentation/cubit/product_form_cubit.dart';
+import '../../../products/domain/repositories/product_repository.dart';
+import '../../../products/data/repositories/product_repository_impl.dart';
+import '../../../products/data/datasources/product_remote_datasource.dart';
+
+// Dashboard feature imports
+import '../cubit/dashboard_cubit.dart';
+
+// Shared Widgets
+import '../../../../shared_widgets/app_drawer.dart';
+
+// Example Icons
+import 'package:flutter/cupertino.dart';
 
 class ArtisanDashboardScreen extends StatelessWidget {
   const ArtisanDashboardScreen({super.key});
@@ -23,35 +44,37 @@ class ArtisanDashboardScreen extends StatelessWidget {
         fontSize: 16.0);
   }
 
-  Widget _buildStatCard(BuildContext context, {
+  // Helper widget for Stat Cards
+  Widget _buildStatCard(BuildContext context, { // Added context here
     required String title,
     required String value,
     required IconData icon,
     VoidCallback? onTap,
   }) {
     return Card(
-      elevation: 2.0,
+      elevation: 1.5,
       color: Colors.grey[850],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)), // Slightly less rounding
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10.0),
         child: Padding(
-          padding: const EdgeInsets.all(12.0), // Keep padding reasonable
+          padding: const EdgeInsets.all(10.0),
           child: Column( 
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween, // This is good if content fits
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: Text(
                       title,
                       style: TextStyle(
                         color: Colors.grey[400],
-                        fontSize: 12, // Further reduced title font
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w500,
                       ),
                       maxLines: 2,
@@ -59,15 +82,15 @@ class ArtisanDashboardScreen extends StatelessWidget {
                     ),
                   ),
                   SizedBox(width: 4),
-                  Icon(icon, color: Theme.of(context).colorScheme.secondary, size: 22), // Further reduced icon
+                  Icon(icon, color: Theme.of(context).colorScheme.secondary, size: 20),
                 ],
               ),
-              // SizedBox(height: 4), // Reduced space, or let spaceBetween handle it
+              SizedBox(height: 4),
               Text(
                 value,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 20, // Further reduced value font size
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
                 maxLines: 1,
@@ -80,11 +103,15 @@ class ArtisanDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionCard(BuildContext context, {
-    required String title,
-    required IconData icon,
-    VoidCallback? onTap,
-  }) {
+  // Helper widget for Action Cards - Ensure signature is correct
+  Widget _buildActionCard(
+    BuildContext context, // Positional parameter first
+    { // Named parameters follow
+      required String title,
+      required IconData icon,
+      VoidCallback? onTap,
+    }
+  ) {
     return Card(
       elevation: 2.0,
       color: Colors.grey[800],
@@ -98,13 +125,13 @@ class ArtisanDashboardScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 30, color: Theme.of(context).colorScheme.secondary),
-              SizedBox(height: 8), // Reduced space
+              SizedBox(height: 8),
               Text(
                 title,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 13, // Slightly reduced
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
                  maxLines: 2,
@@ -117,6 +144,51 @@ class ArtisanDashboardScreen extends StatelessWidget {
     );
   }
 
+  void _navigateToProductForm(BuildContext context) {
+    final apiClient = ApiClient(); 
+    final authRepository = context.read<AuthCubit>().authRepository; 
+    final categoryRepository = CategoryServiceImpl(apiClient: apiClient);
+    final imageUploadService = ImageUploadServiceImpl(); 
+    final productRepository = ProductRepositoryImpl(
+        remoteDataSource: ProductRemoteDataSourceImpl(apiClient: apiClient));
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BlocProvider(
+          create: (newContext) => ProductFormCubit(
+            categoryRepository: categoryRepository,
+            imageUploadService: imageUploadService,
+            productRepository: productRepository,
+            authRepository: authRepository,
+          ),
+          child: const ProductFormScreen(),
+        ),
+      ),
+    ).then((productCreatedSuccessfully) {
+        if (productCreatedSuccessfully == true) {
+            context.read<DashboardCubit>().loadDashboardData();
+        }
+    });
+  }
+
+  void _navigateToMyProducts(BuildContext context) {
+    final apiClient = ApiClient();
+    final authRepository = context.read<AuthCubit>().authRepository;
+    final productRepository = ProductRepositoryImpl(
+        remoteDataSource: ProductRemoteDataSourceImpl(apiClient: apiClient));
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BlocProvider(
+          create: (newContext) => ProductListCubit(
+            productRepository: productRepository,
+            authRepository: authRepository,
+          ),
+          child: const MyProductsScreen(),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,7 +197,7 @@ class ArtisanDashboardScreen extends StatelessWidget {
     if (authState is Authenticated) {
       artisanDisplayName = authState.user.name?.isNotEmpty == true 
                            ? authState.user.name! 
-                           : authState.user.email;
+                           : authState.user.email; 
     }
 
     return Scaffold(
@@ -143,7 +215,6 @@ class ArtisanDashboardScreen extends StatelessWidget {
         builder: (context, state) {
           return RefreshIndicator(
             onRefresh: () async {
-              // _showToast("Refreshing dashboard..."); // Optional: Toast on refresh start
               await context.read<DashboardCubit>().loadDashboardData();
             },
             backgroundColor: Colors.grey[800],
@@ -172,11 +243,9 @@ class ArtisanDashboardScreen extends StatelessWidget {
                 if (state is DashboardLoading || state is DashboardInitial)
                   GridView.count(
                     crossAxisCount: 2,
-                    childAspectRatio: 2.2, // Increased height relative to width (width / height)
-                                           // Smaller number = more height. Let's try 2.2 (was 1.9, then 2.0)
-                                           // If cell width is ~160, height would be 160/2.2 = ~72px
-                    crossAxisSpacing: 10, // Slightly reduced spacing
-                    mainAxisSpacing: 10,  // Slightly reduced spacing
+                    childAspectRatio: 2.2, // Adjusted for potentially more card height
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                     shrinkWrap: true,
                     physics: NeverScrollableScrollPhysics(),
                     children: List.generate(3, (index) => _buildStatCard(context, title: "Loading...", value: "...", icon: Icons.hourglass_empty_rounded)),
@@ -184,13 +253,13 @@ class ArtisanDashboardScreen extends StatelessWidget {
                 else if (state is DashboardLoaded)
                   GridView.count(
                     crossAxisCount: 2,
-                    childAspectRatio: 2.2, // Consistent aspect ratio
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                    childAspectRatio: 2.2, 
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                     shrinkWrap: true,
                     physics: NeverScrollableScrollPhysics(),
                     children: [
-                      _buildStatCard(context, title: "Active Products", value: state.activeProductCount.toString(), icon: CupertinoIcons.cube_box_fill, onTap: () { _showToast("My Products (TBD)"); }),
+                      _buildStatCard(context, title: "Active Products", value: state.activeProductCount.toString(), icon: CupertinoIcons.cube_box_fill, onTap: () => _navigateToMyProducts(context)),
                       _buildStatCard(context, title: "Active Services", value: state.activeServiceCount.toString(), icon: CupertinoIcons.wrench_fill, onTap: () { _showToast("My Services (TBD)"); }),
                       _buildStatCard(context, title: "Training Offers", value: state.activeTrainingCount.toString(), icon: CupertinoIcons.book_fill, onTap: () { _showToast("My Training (TBD)"); }),
                     ],
@@ -201,28 +270,29 @@ class ArtisanDashboardScreen extends StatelessWidget {
                      child: Center(child: Text("Could not load dashboard stats. Pull to refresh.", style: TextStyle(color: Colors.orangeAccent))),
                    ),
 
-                SizedBox(height: 24), // Adjusted spacing
+                SizedBox(height: 24),
                 Text(
                   'Quick Actions',
                   style: TextStyle(
-                    fontSize: 18, // Slightly reduced
+                    fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(height: 12), // Reduced spacing
+                SizedBox(height: 12),
           
                 // Actions Section
                 GridView.count(
                   crossAxisCount: 2,
-                  crossAxisSpacing: 10, // Slightly reduced
-                  mainAxisSpacing: 10,  // Slightly reduced
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
                   shrinkWrap: true,
                   physics: NeverScrollableScrollPhysics(),
-                  childAspectRatio: 1.2, // Adjusted aspect ratio
+                  childAspectRatio: 1.15, 
                   children: [
-                    _buildActionCard(context, title: 'Add New Product', icon: Icons.add_shopping_cart, onTap: () { _showToast('Navigate to Add Product (TBD)'); }),
-                    _buildActionCard(context, title: 'View My Listings', icon: Icons.inventory_2_outlined, onTap: () { _showToast('Navigate to My Listings (TBD)'); }),
+                    // Calls to _buildActionCard are now correct
+                    _buildActionCard(context, title: 'Add New Product', icon: Icons.add_shopping_cart, onTap: () => _navigateToProductForm(context)),
+                    _buildActionCard(context, title: 'View My Listings', icon: Icons.inventory_2_outlined, onTap: () => _navigateToMyProducts(context)),
                     _buildActionCard(context, title: 'Manage Profile', icon: Icons.account_circle_outlined, onTap: () { _showToast('Navigate to Manage Profile (TBD)'); }),
                     _buildActionCard(context, title: 'View Orders', icon: Icons.receipt_long_outlined, onTap: () { _showToast('Navigate to View Orders (TBD)'); }),
                   ],
